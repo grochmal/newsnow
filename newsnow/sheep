@@ -1,0 +1,259 @@
+# Sheep #
+
+We have the coordinates of a number of sheep in a large field.  Propose an
+algorithm that can determine how many groups they form.  (Pseudocode or actual
+code is welcome but no necessary.)  What are the advantages and disadvantages
+of the proposed algorithm? Can you describe any circumstances in which it can
+go wrong, and if so, how?
+
+# Overview #
+
+The flock of sheep problem is a classical application of clustering in which we
+want the algorithm to discover the number of groups in the data.  Given that
+the output we want is the number of groups, algorithms that require the number
+of groups as an input, most notably k-means, are out of question.
+
+Simplest algorithms for finding the number of groups are the ones in the
+hierarchical clustering collection.  Hierarchical clustering can be performed
+in several ways, for which reason we call it a collection of algorithms.
+Another, more complex, way would be to use an unsupervised neural network and
+evaluate the grouping after crossing the trained network.
+
+The neural network approach has the issue that the final evaluation still needs
+input from a human, who needs to look at the NNs output and count the clusters.
+This kind of approach is often needed if our data has more than 2 or 3
+dimensions, i.e. the network will create a 2 or 3 dimensional representation of
+the multidimensional data, representation which can be then evaluated by a
+human.  Our sheep are already in a plane, therefore there's little benefit in
+using a NN on them.  Instead we will concentrate on hierarchical clustering.
+
+# Hierarchical Clustering #
+
+The hierarchical clustering algorithm has several variants.  The variants
+distinguish by either evaluating the data in a divisive manner (starts from a
+single cluster and then divide) or agglomerative (starts from as many clusters
+as data points and join the clusters two by two), or by the distance functions
+to evaluate distance between clusters.  The divisive approach is best suited to
+very specific problems, therefore we will take the agglomerative approach to
+the clustering of our sheep.  As for the distance function we can discuss it
+later because we can describe the algorithm without considering differences
+between distance functions, i.e. the algorithm below works independently of how
+the distance between clusters is calculated.
+
+Agglomerative hierarchical clustering will work on the sheep as follows:
+
+1. Start by creating clusters of one sheep each, we will have N clusters for N
+sheep.  Place all clusters on a list.
+
+2. Evaluate distance between all clusters (the way how distance is evaluated
+depends on the algorithm, see below for the digression on distance).
+
+3. Take two clusters with the smallest distance between them and merge them.
+If more than two clusters have the same minimum distance select the two to be
+joined randomly.
+
+4. Remove the two clusters that were merged into one from the list of clusters
+and add the one merged cluster to the list.  The coordinates of the elements
+themselves (sheep in our case) shall be kept as these are needed to evaluate
+distance.
+
+5. If only one cluster remain in the list stop the algorithm.  Otherwise count
+one iteration (increment iteration counter) and return to step 2.
+
+The pseudocode for this algorithm can be seen below.  Note that we often want
+to stop hierarchical clustering early (the reason will be come clear later)
+therefore a stop criterion is added to the algorithm.
+
+sheep_list     <- all sheep
+cluster_list   <- [(sheep) for sheep in sheep_list]
+distance       <- distance_evaluation_function
+stop_criterion <- criterion_function
+iterations     <- 0
+while not stop
+  distance <- Null
+  left     <- Null
+  right    <- Null
+  for cluster in cluster_list
+    clist <- cluster_list - cluster  # remove current cluster from list
+    randomize(clist)  # not strictly necessary
+    for other_cluster in clist
+      this_distance = distance(cluster, other_cluster)
+      if distance > this_distance or Null == distance
+         left     = cluster
+         right    = other_cluster
+         distance = this_distance
+      end if
+    end for
+  end for
+  cluster_list <- cluster_list - [left,right]
+  cluster_list <- cluster_list + [(left,right)]
+  iterations   <- iterations + 1
+  if 0 == length(cluster_list)
+    break
+  end if
+  if stop_criterion()
+    break
+  end if
+
+## Distance ##
+
+Several distance measures are known to perform well in hierarchical clustering:
+single link, complete link, centroid, or energy based distance measures.  Given
+that we do not want to complicate the problem unless necessary we will
+concentrate on the two simplest distance measures: single link and complete
+link.
+
+Measuring by single link distance the distance between two clusters is the
+minimum Euclidean distance between any elements of the clusters, i.e.
+
+distance = min({ ED(a,b) | a in A, b in B })
+  # where ED is the Euclidean distance
+
+The single link measure produces elongated clusters.  This is good if the data
+itself is elongated (e.g. radial or helix distributions).  Yet, when the data
+forms well defined clusters close to each other, the single link distance may
+provoke the join between two clusters that should be separated.
+
+In complete link distance we consider the maximum Euclidean distance between
+any elements of the two clusters, i.e.
+
+distance = max({ ED(a,b) | a in A, b in B })
+  # where ED is the Euclidean distance
+
+Complete link is less sensitive to proximity between clusters, and, therefore,
+it is less likely to inadvertently join two clusters that should be separated.
+On the other hand, complete link behaves badly on elongated clusters.
+
+Note that the Euclidean distance between the sheep is still a distance between
+vectors, i.e.
+
+distance = sqrt((a.x - b.x)*(a.x - b.x) + (a.y - b.y)*(a.y - b.y))
+  # where sqrt is the square root function
+
+There is no magical formula for deciding on the distance measure, we will need
+to look at several distributions of sheep and decide which measure is best for
+the problem.  Based on the fact whether the sheep form more often elongated
+clusters or clusters that are close to each other.
+
+## Stop Criterion ##
+
+OK, Hierarchical clustering gives us a decent algorithm to cluster the sheep
+together.  Moreover it gives us some freedom to choose the way we measure
+distance to adapt for different distributions of sheep.  Yet, we want that the
+algorithm to output the number of the clusters, which right now it does not.
+The current algorithm always ends with a single cluster.
+
+Earlier in the pseudocode for the clustering we have seen a stop criterion
+parameter.  This parameter is needed to stop the hierarchical clustering early,
+then we can inspect the list of clusters at that stage to tell how many
+clusters we have.  But how we decide when the clustering shall stop?
+
+Again we need some knowledge about the distribution of the clusters in the
+data.  If there are several clusters that are small, stopping the clustering
+right in the middle is likely to give the best estimate.  Instead, if there are
+few big clusters, stopping the clustering closer to the end is indicated.
+Therefore, for small clusters we shall stop the clustering at 50% and for big
+clusters at 75%.  But how do we know how long the clustering will take?
+
+In the hierarchical clustering implementation above it will take exactly N-1
+steps to cluster N sheep.  Therefore, we need a stop criterion that will stop
+the iteration at:
+
+floor((N-1)*0.5)  steps  # for 50% of iterations
+floor((N-1)*0.75) steps  # for 75% of iterations
+
+Once the clustering stops we need to output the length of the list of clusters
+as the number of clusters of sheep.
+
+# Alternate algorithm #
+
+The original question asked to propose an algorithm, which can be understood as
+proposing an original algorithm.  Hierarchical clustering is certainly not
+novel.  Therefore, here we describe an algorithm that, although is a
+combination of known algorithms and is slow when compared to the state of art,
+is novel in how it decides about its starting parameters.  The algorithm is a
+stochastic swarm of sheep, as a stochastic swarm the algorithm has a chance to
+not converge.
+
+Given the fact that the sheep are on a plane, the Euclidean distance between
+two sheep is trivial to compute.  And therefore we can compute a list of all
+distances between all sheep, even if the number of sheep is big.  Note that it
+is easier to compute each distance two times (in a double loop) and then divide
+all means by two while extending percentiles to their doubles.
+
+If we define a minimum distance limit under which two sheep are considered in
+the same cluster and a maximum distance limit above which two sheep are not in
+the same cluster, then we can perturb all sheep that are between these two
+limits until the entire swarm falls into well defined clusters.
+
+Given that all distances in Euclidean space are positive we can define a
+minimum distance marker under which a sheep is in the same cluster as another
+as:
+
+min_dist_marker = mean(percentile(10, sort(distances)))
+  # where distances is a list of distances between all sheep
+
+This distance shall be small enough not to grind the algorithm to a stand still
+at the beginning, but big enough to make it converge quickly.
+
+We can also define the maximum distance marker above which a sheep shall never
+be considered:
+
+max_dist_marker = mean(percentile(10, inverse(sort(distances))))
+  # where distances is a list of distances between all sheep
+
+The algorithm itself would happen as:
+
+1. Place all sheep in a list.  Calculate minimum distance marker and maximum
+distance marker.
+
+2. For each sheep find the closest neighbour (A) and the closest neighbour that
+is further than the minimum distance marker but closer than the maximum
+distance marker (B).
+
+3. If both neighbours (A and B) can be found move the sheep towards the middle
+of its neighbours covering half the distance.
+
+  sheep = sheep + (A - sheep + B - sheep)/2
+    # where all elements are treated as vectors
+
+If any of the two neighbours (A or B) cannot be found.  Do nothing.
+
+4. If no sheep moved during the previous iteration stop.  Otherwise go back to
+step 2.  Also, if a maximum number of iterations passed stop (this is to
+prevent non converging swarms from running forever).
+
+Now we are confident that all sheep that are clustered close together.  And we
+can count the number of clusters by simply moving the sheep that are close
+together on top of each other.  This second phase of the algorithm shall run as
+follows.
+
+1. Place all sheep on a list.
+
+2. Randomize list (order of elements).
+
+3. For each sheep find the closest neighbour, which must be closer than the
+minimum distance marker.  If a neighbour was found remove sheep from list.
+
+4. If no sheep was removed during the previous iteration, output the length of
+the list of sheep as the number of clusters and stop.  Otherwise go back to set
+2.
+
+The good and the bad sides of this algorithm is that it heavily relies on
+stochasticity.  There is a good chance that the algorithm will give very
+different results when given the same problem repetitively, i.e. the model
+built by the swarm is distinct between runs and a single run hardly solves the
+problem.
+
+Yet, giving distinct results allows for the use of ensembles, i.e. we can run
+the swarm several times and then compute the most common solution.  An ensemble
+of stochastic models often produces good results even for very hard problems.
+There is a chance that an ensemble of swarms will perform well on very specific
+distributions (e.g. radial distribution with clusters close together) where
+neither single link or complete link hierarchical clustering can achieve good
+results[1].
+
+[1]: Centroid distance measure for hierarchical clustering would perform well
+for that distribution.  But we did not discuss the centroid distance measure in
+the previous digression.
+
